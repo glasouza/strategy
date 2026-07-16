@@ -1,0 +1,234 @@
+{
+    "metadata": {
+        "symbol": "BTCUSD",
+        "timeframe": "H1",
+        "period_start": "2020-01-02",
+        "period_end": "2026-04-10",
+        "total_candles_analyzed": 54835,
+        "timezone_reference": "EET (MetaTrader Default)"
+    },
+    "regime_context": {
+        "global_average_range": 375.66,
+        "high_volatility_threshold_90th": 816.3,
+        "low_volatility_threshold_10th": 47.7
+    },
+    "time_of_day_seasonality": [
+        {
+            "hour": 0,
+            "range_mean": 412.39378555798686,
+            "range_median": 308.5,
+            "range_std": 417.2710153279489,
+            "is_bullish_mean": 0.4708971553610503,
+            "is_bearish_mean": 0.4971553610503282,
+            "volume_mean": 17.85221921225383
+        },
+        {
+            "hour": 1,
+            "range_mean": 383.51781181619253,
+            "range_median": 288.5,
+            "range_std": 389.26226556719996,
+            "is_bullish_mean": 0.48052516411378554,
+            "is_bearish_mean": 0.48708971553610503,
+            "volume_mean": 16.48365759299781
+        },
+        {
+            "hour": 2,
+            "range_mean": 348.03746170678323,
+            "range_median": 255.6999999999971,
+            "range_std": 362.5632310051819,
+            "is_bullish_mean": 0.4726477024070022,
+            "is_bearish_mean": 0.4958424507658643,
+            "volume_mean": 16.674484652078775
+        },
+        {
+            "hour": 3,
+            "range_mean": 311.72761487964976,
+            "range_median": 226.29999999999563,
+            "range_std": 337.97373557754014,
+            "is_bullish_mean": 0.48096280087527354,
+            "is_bearish_mean": 0.4866520787746171,
+            "volume_mean": 17.259053772428885
+        },
+        {
+            "hour": 4,
+            "range_mean": 299.57045951859936,
+            "range_median": 218.40000000000146,
+            "range_std": 305.701017799615,
+            "is_bullish_mean": 0.49190371991247267,
+            "is_bearish_mean": 0.47571115973741795,
+            "volume_mean": 15.938758446389496
+        },
+        {
+            "hour": 5,
+            "range_mean": 288.14503282275695,
+            "range_median": 218.20000000000437,
+            "range_std": 319.79007168103703,
+            "is_bullish_mean": 0.487964989059081,
+            "is_bearish_mean": 0.4800875273522976,
+            "volume_mean": 15.676171781181619
+        },
+        {
+            "hour": 6,
+            "range_mean": 301.59479212253825,
+            "range_median": 223.8000000000029,
+            "range_std": 334.98172264228015,
+            "is_bullish_mean": 0.49540481400437636,
+            "is_bearish_mean": 0.4722100656455142,
+            "volume_mean": 16.559802936542667
+        },
+        {
+            "hour": 7,
+            "range_mean": 317.2402188183808,
+            "range_median": 235.3000000000029,
+            "range_std": 324.29474356919064,
+            "is_bullish_mean": 0.4866520787746171,
+            "is_bearish_mean": 0.48227571115973744,
+            "volume_mean": 19.71400339606127
+        },
+        {
+            "hour": 8,
+            "range_mean": 338.53343544857756,
+            "range_median": 260.5,
+            "range_std": 331.5126604904697,
+            "is_bullish_mean": 0.49321663019693657,
+            "is_bearish_mean": 0.47571115973741795,
+            "volume_mean": 18.73736128227571
+        },
+        {
+            "hour": 9,
+            "range_mean": 322.9690153172865,
+            "range_median": 244.6999999999971,
+            "range_std": 326.1848865623079,
+            "is_bullish_mean": 0.49190371991247267,
+            "is_bearish_mean": 0.47702407002188185,
+            "volume_mean": 19.026178306345734
+        },
+        {
+            "hour": 10,
+            "range_mean": 311.68109409190356,
+            "range_median": 246.90000000000146,
+            "range_std": 304.6800353229131,
+            "is_bullish_mean": 0.5015317286652079,
+            "is_bearish_mean": 0.4652078774617068,
+            "volume_mean": 18.855651330415753
+        },
+        {
+            "hour": 11,
+            "range_mean": 318.3339606126913,
+            "range_median": 250.60000000000582,
+            "range_std": 301.50696264295254,
+            "is_bullish_mean": 0.4984682713347921,
+            "is_bearish_mean": 0.47439824945295406,
+            "volume_mean": 19.026929803063457
+        },
+        {
+            "hour": 12,
+            "range_mean": 381.1054704595186,
+            "range_median": 297.6000000000058,
+            "range_std": 391.4130073591777,
+            "is_bullish_mean": 0.4853391684901532,
+            "is_bearish_mean": 0.48315098468271334,
+            "volume_mean": 18.63284712035011
+        },
+        {
+            "hour": 13,
+            "range_mean": 455.4507221006564,
+            "range_median": 330.0,
+            "range_std": 442.7510443795383,
+            "is_bullish_mean": 0.47308533916849016,
+            "is_bearish_mean": 0.4958424507658643,
+            "volume_mean": 19.539456231947483
+        },
+        {
+            "hour": 14,
+            "range_mean": 544.658366098733,
+            "range_median": 379.09999999999854,
+            "range_std": 551.1064962437382,
+            "is_bullish_mean": 0.48274355613805153,
+            "is_bearish_mean": 0.48536478811708167,
+            "volume_mean": 23.439331799912626
+        },
+        {
+            "hour": 15,
+            "range_mean": 498.17300962379693,
+            "range_median": 356.1499999999978,
+            "range_std": 501.3366701901304,
+            "is_bullish_mean": 0.5008748906386702,
+            "is_bearish_mean": 0.4671916010498688,
+            "volume_mean": 22.83139471128609
+        },
+        {
+            "hour": 16,
+            "range_mean": 457.0902887139107,
+            "range_median": 352.59999999999854,
+            "range_std": 423.18665537630267,
+            "is_bullish_mean": 0.4663167104111986,
+            "is_bearish_mean": 0.5008748906386702,
+            "volume_mean": 23.63472617672791
+        },
+        {
+            "hour": 17,
+            "range_mean": 421.227408056042,
+            "range_median": 305.4999999999982,
+            "range_std": 441.9737820240112,
+            "is_bullish_mean": 0.5087565674255692,
+            "is_bearish_mean": 0.45928196147110334,
+            "volume_mean": 20.18933859894921
+        },
+        {
+            "hour": 18,
+            "range_mean": 405.6262697022766,
+            "range_median": 298.99999999999636,
+            "range_std": 408.1794707519324,
+            "is_bullish_mean": 0.4938704028021016,
+            "is_bearish_mean": 0.47373029772329245,
+            "volume_mean": 19.307405446584937
+        },
+        {
+            "hour": 19,
+            "range_mean": 400.49986865148844,
+            "range_median": 297.39999999999964,
+            "range_std": 405.14705359562265,
+            "is_bullish_mean": 0.4995621716287215,
+            "is_bearish_mean": 0.4680385288966725,
+            "volume_mean": 19.536711528021016
+        },
+        {
+            "hour": 20,
+            "range_mean": 405.78673380035025,
+            "range_median": 290.49999999999636,
+            "range_std": 417.9517518151993,
+            "is_bullish_mean": 0.5140105078809106,
+            "is_bearish_mean": 0.45096322241681264,
+            "volume_mean": 18.39600604640981
+        },
+        {
+            "hour": 21,
+            "range_mean": 377.69763572679506,
+            "range_median": 277.0,
+            "range_std": 413.4447976183993,
+            "is_bullish_mean": 0.5310858143607706,
+            "is_bearish_mean": 0.43695271453590195,
+            "volume_mean": 16.67433282837128
+        },
+        {
+            "hour": 22,
+            "range_mean": 375.46748466257645,
+            "range_median": 277.1999999999971,
+            "range_std": 399.58837896385893,
+            "is_bullish_mean": 0.5035056967572304,
+            "is_bearish_mean": 0.4645048203330412,
+            "volume_mean": 12.387310008764242
+        },
+        {
+            "hour": 23,
+            "range_mean": 338.8218667835231,
+            "range_median": 262.1499999999978,
+            "range_std": 330.26345924360265,
+            "is_bullish_mean": 0.4820333041191937,
+            "is_bearish_mean": 0.4855390008764242,
+            "volume_mean": 16.162796687116565
+        }
+    ],
+    "trading_instructions": "Este arquivo contem a empiria matematica do ativo. Sempre que o horario de operacao for mencionado, busque as metricas em time_of_day_seasonality para atestar probabilidade. Ex: Se a hora atual for conhecida por alta probabilidade de queda (is_bearish > 55%), o prompt/LLM deve ser contraintuitivo para comprar ou exigir confluencia extra."
+}

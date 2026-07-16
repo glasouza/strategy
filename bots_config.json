@@ -1,0 +1,88 @@
+[
+  {
+    "id": "cluster_xagusd",
+    "name": "Cluster XAGUSD",
+    "script": "mt5_intraday_cluster_bot.py",
+    "cwd": "D:/Meus_Documentos/Scripts/Teste_sinais3/script_chatbot/tutorial-env/rl_trader/rl_trader_cluster/Scripts",
+    "python": "D:/Meus_Documentos/Scripts/Teste_sinais3/script_chatbot/tutorial-env/rl_trader/rl_trader_cluster/Scripts/python.exe",
+    "args": [
+      "XAUUSD",
+      "--strategy",
+      "breakout",
+      "--no-telegram"
+    ],
+    "csv_log": "bot_cluster_log.csv",
+    "enabled": false
+  },
+  {
+    "id": "lstm_xauusd",
+    "name": "LSTM XAUUSD",
+    "script": "liv_trader_LSTM_1_2.py",
+    "cwd": "D:/Meus_Documentos/Scripts/Teste_sinais3/script_chatbot/tutorial-env/rl_trader/rl_trader_exchange",
+    "python": "D:/Meus_Documentos/Scripts/Teste_sinais3/script_chatbot/tutorial-env/rl_trader/rl_trader_exchange/python.exe",
+    "args": [
+      "XAUUSD",
+      "--exchange",
+      "demo",
+      "--model",
+      "ppo_trading_BEST_LSTM_XAUUSD_D1_20260322_1927.zip",
+      "--no-telegram"
+    ],
+    "csv_log": "bot_exchange_log.csv",
+    "enabled": false
+  },
+  {
+    "id": "llm_trader",
+    "name": "LLM Trader",
+    "script": "mt5_llm_trader.py",
+    "cwd": "D:/Meus_Documentos/Scripts/Teste_sinais3/script_chatbot/tutorial-env/rl_trader/strategy/Scripts",
+    "python": "D:/Meus_Documentos/Scripts/Teste_sinais3/script_chatbot/tutorial-env/rl_trader/strategy/Scripts/python.exe",
+    "args": [
+      "--symbols",
+      "XAUUSD",
+      "--exchange",
+      "demo",
+      "--lot",
+      "0.1",
+      "--loop"
+    ],
+    "csv_log": "bot_trades_log.csv",
+    "enabled": false
+  },
+  {
+    "id": "hybrid_bot",
+    "name": "Hybrid RSI+Breakout+Vol",
+    "script": "mt5_hybrid_bot.py",
+    "cwd": "D:/Meus_Documentos/Scripts/Teste_sinais3/script_chatbot/tutorial-env/rl_trader/strategy/Scripts",
+    "python": "D:/Meus_Documentos/Scripts/Teste_sinais3/script_chatbot/tutorial-env/rl_trader/strategy/Scripts/python.exe",
+    "args": [
+      "--symbols",
+      "XAUUSD",
+      "--exchange",
+      "demo",
+      "--lot",
+      "0.1",
+      "--loop"
+    ],
+    "csv_log": "bot_hybrid_log.csv",
+    "enabled": false
+  },
+  {
+    "id": "rsi_breakout",
+    "name": "RSI+Breakout (Pine)",
+    "script": "mt5_rsi_breakout_bot.py",
+    "cwd": "D:/Meus_Documentos/Scripts/Teste_sinais3/script_chatbot/tutorial-env/rl_trader/strategy/Scripts",
+    "python": "D:/Meus_Documentos/Scripts/Teste_sinais3/script_chatbot/tutorial-env/rl_trader/strategy/Scripts/python.exe",
+    "args": [
+      "--symbols",
+      "XAUUSD",
+      "--exchange",
+      "demo",
+      "--lot",
+      "0.1",
+      "--loop"
+    ],
+    "csv_log": "bot_rsi_breakout_log.csv",
+    "enabled": false
+  }
+]

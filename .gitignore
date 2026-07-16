@@ -1,0 +1,10 @@
+# Bloquear históricos de dados pesados de Forex/Metais
+*.csv
+*.7z
+*.bin
+
+# Bloquear o ambiente virtual
+venv/
+.venv/
+.env
+__pycache__/

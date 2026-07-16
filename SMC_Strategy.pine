@@ -1,0 +1,429 @@
+// =============================================================================
+// SMC Strategy v3 — Optimized Smart Money Concepts
+// Adapted from LuxAlgo Smart Money Concepts Indicator
+// Original indicator © LuxAlgo (CC BY-NC-SA 4.0)
+// =============================================================================
+
+//@version=5
+strategy('SMC Strategy v3', 
+     overlay               = true, 
+     max_labels_count       = 500, 
+     max_lines_count        = 500, 
+     max_boxes_count        = 500,
+     initial_capital        = 10000,
+     default_qty_type       = strategy.percent_of_equity,
+     default_qty_value      = 30,
+     pyramiding             = 0,
+     commission_type        = strategy.commission.cash_per_order,
+     commission_value       = 0,
+     slippage               = 2,
+     process_orders_on_close = false,
+     calc_on_every_tick     = false)
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CONSTANTS
+// ─────────────────────────────────────────────────────────────────────────────
+BULLISH = +1
+BEARISH = -1
+GREEN   = #089981
+RED     = #F23645
+BLUE    = #2157f3
+GRAY    = #878b94
+
+// ─────────────────────────────────────────────────────────────────────────────
+// INPUTS
+// ─────────────────────────────────────────────────────────────────────────────
+// Position & Risk
+riskGroup          = '═══ Risk Management ═══'
+posSize            = input.float(30,    'Position Size (% Equity)',   group = riskGroup, minval = 1, maxval = 100, step = 5)
+riskReward         = input.float(2.5,   'Risk:Reward Ratio',         group = riskGroup, minval = 1.0, maxval = 10, step = 0.5)
+atrLen             = input.int(14,      'ATR Length',                 group = riskGroup, minval = 5)
+slMode             = input.string('Structure', 'Stop Loss Mode',     group = riskGroup, options = ['Structure', 'ATR', 'Hybrid'])
+atrMultSL          = input.float(1.5,   'ATR SL Multiplier',         group = riskGroup, minval = 0.5, maxval = 5.0, step = 0.5)
+useTrailStop       = input.bool(true,   'Trailing Stop',             group = riskGroup)
+trailATRMult       = input.float(2.5,   'Trail ATR Multiplier',      group = riskGroup, minval = 1.0, maxval = 5.0, step = 0.5)
+useBreakeven       = input.bool(true,   'Move SL to Breakeven',      group = riskGroup, tooltip = 'Move SL to entry when price reaches 1:1 R:R')
+
+// Structure
+smcGroup           = '═══ SMC Structure ═══'
+swingLen           = input.int(50,      'Swing Length',               group = smcGroup, minval = 10, maxval = 200)
+intLen             = input.int(5,       'Internal Length',            group = smcGroup, minval = 2, maxval = 20)
+
+// Trend Filters
+filterGroup        = '═══ Trend Filters ═══'
+useEMAFilter       = input.bool(true,   'EMA Trend Filter',          group = filterGroup, tooltip = 'Only long above EMA, short below')
+emaLen             = input.int(200,     'EMA Length',                 group = filterGroup, minval = 20, maxval = 500)
+useADXFilter       = input.bool(false,  'ADX Trend Strength Filter', group = filterGroup, tooltip = 'Only trade when ADX > threshold')
+adxThreshold       = input.int(20,      'ADX Threshold',             group = filterGroup, minval = 10, maxval = 50)
+adxLen             = input.int(14,      'ADX Length',                 group = filterGroup, minval = 5)
+
+// Entry
+entryGroup         = '═══ Entry Logic ═══'
+entryMode          = input.string('Any Structure Break', 'Entry Mode', group = entryGroup, options = ['Any Structure Break', 'CHoCH Only', 'BOS Only', 'CHoCH Swing + Internal'])
+allowLong          = input.bool(true,   'Allow Longs',               group = entryGroup)
+allowShort         = input.bool(true,   'Allow Shorts',              group = entryGroup)
+requireSwingAlign  = input.bool(true,   'Require Swing Alignment',   group = entryGroup, tooltip = 'Internal signals must align with swing trend')
+usePDFilter        = input.bool(false,  'Premium/Discount Filter',   group = entryGroup)
+cooldownBars       = input.int(3,       'Min Bars Between Trades',   group = entryGroup, minval = 0, maxval = 50)
+
+// Session
+sessGroup          = '═══ Session ═══'
+useSession         = input.bool(false,  'Session Filter',            group = sessGroup)
+sessStart          = input.int(8,       'Start (UTC)',               group = sessGroup, minval = 0, maxval = 23)
+sessEnd            = input.int(20,      'End (UTC)',                 group = sessGroup, minval = 0, maxval = 23)
+
+// Visuals
+vizGroup           = '═══ Visuals ═══'
+showStruct         = input.bool(true,   'Structure Lines',           group = vizGroup)
+showLabels         = input.bool(true,   'Entry Labels',              group = vizGroup)
+showDash           = input.bool(true,   'Dashboard',                 group = vizGroup)
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CORE CALCULATIONS
+// ─────────────────────────────────────────────────────────────────────────────
+atrVal  = ta.atr(atrLen)
+emaVal  = ta.ema(close, emaLen)
+
+// ADX calculation
+[diPlus, diMinus, adxVal] = ta.dmi(adxLen, adxLen)
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STRUCTURE VARIABLES
+// ─────────────────────────────────────────────────────────────────────────────
+var float swHiLevel     = na
+var float swLoLevel     = na
+var float intHiLevel    = na
+var float intLoLevel    = na
+var int   swHiBar       = na
+var int   swLoBar       = na
+var int   intHiBar      = na
+var int   intLoBar      = na
+var bool  swHiCrossed   = false
+var bool  swLoCrossed   = false
+var bool  intHiCrossed  = false
+var bool  intLoCrossed  = false
+var int   swBias        = 0
+var int   intBias       = 0
+
+// Trade management
+var int   lastTradeBar  = 0
+var float entrySL       = na
+var float entryTP       = na
+var float entryPrice    = na
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PIVOT DETECTION
+// ─────────────────────────────────────────────────────────────────────────────
+detectPivots(int len) =>
+    var int _leg = 0
+    _newHi = high[len] > ta.highest(len)
+    _newLo = low[len]  < ta.lowest(len)
+    if _newHi
+        _leg := 0
+    else if _newLo
+        _leg := 1
+    _pivHi = ta.change(_leg) == -1
+    _pivLo = ta.change(_leg) == +1
+    [_pivHi, _pivLo]
+
+// Swing pivots
+[swPivHi, swPivLo] = detectPivots(swingLen)
+
+if swPivHi
+    swHiLevel   := high[swingLen]
+    swHiBar     := bar_index[swingLen]
+    swHiCrossed := false
+
+if swPivLo
+    swLoLevel   := low[swingLen]
+    swLoBar     := bar_index[swingLen]
+    swLoCrossed := false
+
+// Internal pivots
+[intPivHi, intPivLo] = detectPivots(intLen)
+
+if intPivHi
+    intHiLevel   := high[intLen]
+    intHiBar     := bar_index[intLen]
+    intHiCrossed := false
+
+if intPivLo
+    intLoLevel   := low[intLen]
+    intLoBar     := bar_index[intLen]
+    intLoCrossed := false
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STRUCTURE BREAK DETECTION
+// ─────────────────────────────────────────────────────────────────────────────
+detectBreaks(float hiLvl, bool hiCr, float loLvl, bool loCr, int bias) =>
+    bool _bCHoCH = false, bool _bBOS = false
+    bool _sCHoCH = false, bool _sBOS = false
+    int  _nBias = bias
+    bool _hiOut = hiCr, bool _loOut = loCr
+
+    if not na(hiLvl) and ta.crossover(close, hiLvl) and not hiCr
+        if bias == BEARISH or bias == 0
+            _bCHoCH := true
+        else
+            _bBOS := true
+        _nBias := BULLISH
+        _hiOut := true
+
+    if not na(loLvl) and ta.crossunder(close, loLvl) and not loCr
+        if bias == BULLISH or bias == 0
+            _sCHoCH := true
+        else
+            _sBOS := true
+        _nBias := BEARISH
+        _loOut := true
+
+    [_bCHoCH, _bBOS, _sCHoCH, _sBOS, _nBias, _hiOut, _loOut]
+
+// Swing breaks
+[swBullCH, swBullBOS, swBearCH, swBearBOS, swNB, swHiCr2, swLoCr2] = detectBreaks(swHiLevel, swHiCrossed, swLoLevel, swLoCrossed, swBias)
+swBias      := swNB
+swHiCrossed := swHiCr2
+swLoCrossed := swLoCr2
+
+// Internal breaks
+[intBullCH, intBullBOS, intBearCH, intBearBOS, intNB, intHiCr2, intLoCr2] = detectBreaks(intHiLevel, intHiCrossed, intLoLevel, intLoCrossed, intBias)
+intBias      := intNB
+intHiCrossed := intHiCr2
+intLoCrossed := intLoCr2
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DRAW STRUCTURE
+// ─────────────────────────────────────────────────────────────────────────────
+if showStruct
+    if swBullCH or swBullBOS
+        t = swBullCH ? 'CHoCH' : 'BOS'
+        c = swBullCH ? color.new(GREEN, 0) : color.new(GREEN, 40)
+        line.new(bar_index - 1, swHiLevel, bar_index, swHiLevel, color = c, width = 2)
+        label.new(bar_index, swHiLevel, t, color = color(na), textcolor = c, style = label.style_label_down, size = size.small)
+    if swBearCH or swBearBOS
+        t = swBearCH ? 'CHoCH' : 'BOS'
+        c = swBearCH ? color.new(RED, 0) : color.new(RED, 40)
+        line.new(bar_index - 1, swLoLevel, bar_index, swLoLevel, color = c, width = 2)
+        label.new(bar_index, swLoLevel, t, color = color(na), textcolor = c, style = label.style_label_up, size = size.small)
+    if intBullCH or intBullBOS
+        c2 = color.new(GREEN, 20)
+        line.new(bar_index - 1, intHiLevel, bar_index, intHiLevel, color = c2, style = line.style_dashed)
+        label.new(bar_index, intHiLevel, intBullCH ? 'iCH' : 'iBOS', color = color(na), textcolor = c2, style = label.style_label_down, size = size.tiny)
+    if intBearCH or intBearBOS
+        c2 = color.new(RED, 20)
+        line.new(bar_index - 1, intLoLevel, bar_index, intLoLevel, color = c2, style = line.style_dashed)
+        label.new(bar_index, intLoLevel, intBearCH ? 'iCH' : 'iBOS', color = color(na), textcolor = c2, style = label.style_label_up, size = size.tiny)
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ENTRY TRIGGERS
+// ─────────────────────────────────────────────────────────────────────────────
+// Aggregate signals per mode
+bool longTrig  = false
+bool shortTrig = false
+
+if entryMode == 'Any Structure Break'
+    longTrig  := swBullCH or swBullBOS or intBullCH or intBullBOS
+    shortTrig := swBearCH or swBearBOS or intBearCH or intBearBOS
+else if entryMode == 'CHoCH Only'
+    longTrig  := swBullCH or intBullCH
+    shortTrig := swBearCH or intBearCH
+else if entryMode == 'BOS Only'
+    longTrig  := swBullBOS or intBullBOS
+    shortTrig := swBearBOS or intBearBOS
+else if entryMode == 'CHoCH Swing + Internal'
+    // Swing CHoCH for reversals + internal for continuation
+    longTrig  := swBullCH or (intBullCH and swBias == BULLISH) or (intBullBOS and swBias == BULLISH)
+    shortTrig := swBearCH or (intBearCH and swBias == BEARISH) or (intBearBOS and swBias == BEARISH)
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FILTERS
+// ─────────────────────────────────────────────────────────────────────────────
+// EMA trend filter
+emaLongOK  = useEMAFilter ? close > emaVal : true
+emaShortOK = useEMAFilter ? close < emaVal : true
+
+// ADX filter
+adxOK = useADXFilter ? adxVal > adxThreshold : true
+
+// Swing alignment
+alignLong  = requireSwingAlign ? swBias == BULLISH : true
+alignShort = requireSwingAlign ? swBias == BEARISH : true
+
+// Premium / Discount
+trailHi    = ta.highest(high, swingLen * 2)
+trailLo    = ta.lowest(low, swingLen * 2)
+eq         = math.avg(trailHi, trailLo)
+pdLong     = usePDFilter ? close < eq : true
+pdShort    = usePDFilter ? close > eq : true
+
+// Session
+curHour    = hour(time, 'UTC')
+inSess     = useSession ? (sessStart <= sessEnd ? (curHour >= sessStart and curHour < sessEnd) : (curHour >= sessStart or curHour < sessEnd)) : true
+
+// Cooldown & position
+cdOK       = (bar_index - lastTradeBar) >= cooldownBars
+noPos      = strategy.position_size == 0
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FINAL CONDITIONS
+// ─────────────────────────────────────────────────────────────────────────────
+longCond  = longTrig  and allowLong  and emaLongOK  and adxOK and alignLong  and pdLong  and inSess and cdOK and noPos
+shortCond = shortTrig and allowShort and emaShortOK and adxOK and alignShort and pdShort and inSess and cdOK and noPos
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STOP LOSS CALCULATION
+// ─────────────────────────────────────────────────────────────────────────────
+calcLongSL() =>
+    float sl = na
+    if slMode == 'Structure'
+        // Use the most recent swing low as SL
+        sl := nz(swLoLevel, close - atrVal * atrMultSL)
+        // Add small buffer below
+        sl := sl - atrVal * 0.2
+    else if slMode == 'ATR'
+        sl := close - atrVal * atrMultSL
+    else  // Hybrid: use the tighter of the two
+        structSL = nz(swLoLevel, close - atrVal * atrMultSL) - atrVal * 0.2
+        atrSL    = close - atrVal * atrMultSL
+        sl := math.max(structSL, atrSL)
+    // Ensure minimum distance
+    minDist = atrVal * 0.5
+    if close - sl < minDist
+        sl := close - minDist
+    sl
+
+calcShortSL() =>
+    float sl = na
+    if slMode == 'Structure'
+        sl := nz(swHiLevel, close + atrVal * atrMultSL)
+        sl := sl + atrVal * 0.2
+    else if slMode == 'ATR'
+        sl := close + atrVal * atrMultSL
+    else
+        structSL = nz(swHiLevel, close + atrVal * atrMultSL) + atrVal * 0.2
+        atrSL    = close + atrVal * atrMultSL
+        sl := math.min(structSL, atrSL)
+    minDist = atrVal * 0.5
+    if sl - close < minDist
+        sl := close + minDist
+    sl
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EXECUTION
+// ─────────────────────────────────────────────────────────────────────────────
+if longCond
+    sl = calcLongSL()
+    dist = close - sl
+    tp = close + dist * riskReward
+    entryPrice := close
+    entrySL    := sl
+    entryTP    := tp
+    strategy.entry('Long', strategy.long, comment = 'L')
+    strategy.exit('XL', 'Long', stop = sl, limit = tp)
+    lastTradeBar := bar_index
+
+if shortCond
+    sl = calcShortSL()
+    dist = sl - close
+    tp = close - dist * riskReward
+    entryPrice := close
+    entrySL    := sl
+    entryTP    := tp
+    strategy.entry('Short', strategy.short, comment = 'S')
+    strategy.exit('XS', 'Short', stop = sl, limit = tp)
+    lastTradeBar := bar_index
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TRADE MANAGEMENT (Breakeven + Trailing)
+// ─────────────────────────────────────────────────────────────────────────────
+if strategy.position_size > 0
+    dist = nz(entryPrice, close) - nz(entrySL, close - atrVal)
+    
+    // Breakeven: move SL to entry when 1:1 reached
+    if useBreakeven and high >= entryPrice + dist
+        entrySL := math.max(nz(entrySL), entryPrice + atrVal * 0.1)  // slightly above entry
+    
+    // Trailing stop
+    if useTrailStop
+        newTrail = high - atrVal * trailATRMult
+        if newTrail > nz(entrySL, 0)
+            entrySL := newTrail
+    
+    strategy.exit('XL', 'Long', stop = entrySL, limit = entryTP)
+
+if strategy.position_size < 0
+    dist = nz(entrySL, close + atrVal) - nz(entryPrice, close)
+    
+    if useBreakeven and low <= entryPrice - dist
+        entrySL := math.min(nz(entrySL, 99999999), entryPrice - atrVal * 0.1)
+    
+    if useTrailStop
+        newTrail = low + atrVal * trailATRMult
+        if newTrail < nz(entrySL, 99999999)
+            entrySL := newTrail
+    
+    strategy.exit('XS', 'Short', stop = entrySL, limit = entryTP)
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CLOSE ON SWING REVERSAL
+// ─────────────────────────────────────────────────────────────────────────────
+if strategy.position_size > 0 and (swBearCH or swBearBOS)
+    strategy.close('Long', comment = 'Rev')
+if strategy.position_size < 0 and (swBullCH or swBullBOS)
+    strategy.close('Short', comment = 'Rev')
+
+// ─────────────────────────────────────────────────────────────────────────────
+// VISUALS
+// ─────────────────────────────────────────────────────────────────────────────
+plotshape(showLabels and longCond,  'L', shape.triangleup,   location.belowbar, GREEN, size = size.small, text = 'L')
+plotshape(showLabels and shortCond, 'S', shape.triangledown, location.abovebar, RED,   size = size.small, text = 'S')
+
+plot(strategy.position_size != 0 ? entrySL : na, 'SL', color.new(RED, 30),   style = plot.style_linebr, linewidth = 2)
+plot(strategy.position_size != 0 ? entryTP : na, 'TP', color.new(GREEN, 30), style = plot.style_linebr, linewidth = 2)
+plot(useEMAFilter ? emaVal : na, 'EMA', color.new(BLUE, 50), linewidth = 2)
+
+tBg = swBias == BULLISH ? color.new(GREEN, 92) : swBias == BEARISH ? color.new(RED, 92) : na
+bgcolor(tBg)
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DASHBOARD 
+// ─────────────────────────────────────────────────────────────────────────────
+if showDash and barstate.islast
+    var table d = table.new(position.top_right, 2, 8, bgcolor = color.new(#1e222d, 10), border_width = 1, border_color = color.new(GRAY, 60))
+    
+    table.cell(d, 0, 0, 'SMC v3',         text_color = color.white,  text_size = size.small, bgcolor = color.new(BLUE, 30))
+    table.cell(d, 1, 0, 'Status',          text_color = color.white,  text_size = size.small, bgcolor = color.new(BLUE, 30))
+    
+    table.cell(d, 0, 1, 'Swing',           text_color = color.white,  text_size = size.tiny)
+    table.cell(d, 1, 1, swBias == BULLISH ? '▲ BULL' : swBias == BEARISH ? '▼ BEAR' : '—', text_color = swBias == BULLISH ? GREEN : RED, text_size = size.tiny)
+    
+    table.cell(d, 0, 2, 'Internal',        text_color = color.white,  text_size = size.tiny)
+    table.cell(d, 1, 2, intBias == BULLISH ? '▲ BULL' : intBias == BEARISH ? '▼ BEAR' : '—', text_color = intBias == BULLISH ? GREEN : RED, text_size = size.tiny)
+    
+    table.cell(d, 0, 3, 'EMA 200',         text_color = color.white,  text_size = size.tiny)
+    table.cell(d, 1, 3, close > emaVal ? 'ABOVE ▲' : 'BELOW ▼', text_color = close > emaVal ? GREEN : RED, text_size = size.tiny)
+    
+    table.cell(d, 0, 4, 'ADX',             text_color = color.white,  text_size = size.tiny)
+    table.cell(d, 1, 4, str.tostring(adxVal, '#.#'), text_color = adxVal > adxThreshold ? GREEN : GRAY, text_size = size.tiny)
+    
+    table.cell(d, 0, 5, 'Position',        text_color = color.white,  text_size = size.tiny)
+    posText = strategy.position_size > 0 ? 'LONG' : strategy.position_size < 0 ? 'SHORT' : 'FLAT'
+    posCol  = strategy.position_size > 0 ? GREEN : strategy.position_size < 0 ? RED : GRAY
+    table.cell(d, 1, 5, posText, text_color = posCol, text_size = size.tiny)
+    
+    table.cell(d, 0, 6, 'Win Rate',        text_color = color.white,  text_size = size.tiny)
+    wins = strategy.wintrades
+    total = strategy.closedtrades
+    wr = total > 0 ? (wins / total) * 100 : 0
+    table.cell(d, 1, 6, str.tostring(wr, '#.#') + '%', text_color = wr > 50 ? GREEN : RED, text_size = size.tiny)
+    
+    table.cell(d, 0, 7, 'Profit Factor',   text_color = color.white,  text_size = size.tiny)
+    table.cell(d, 1, 7, str.tostring(strategy.grossprofit / math.max(strategy.grossloss, 1), '#.##'), text_color = strategy.grossprofit > strategy.grossloss ? GREEN : RED, text_size = size.tiny)
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ALERTS
+// ─────────────────────────────────────────────────────────────────────────────
+if longCond
+    alert('SMC v3: Long Entry', alert.freq_once_per_bar)
+if shortCond
+    alert('SMC v3: Short Entry', alert.freq_once_per_bar)

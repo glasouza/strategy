@@ -1,0 +1,362 @@
+# Arquitetura do Sistema `mt5_llm_trader.py`
+
+## Visão Geral
+
+O `mt5_llm_trader.py` é um **bot de trading automatizado** que combina **indicadores técnicos** (EMA, ADX, RSI, ATR) com **inteligência artificial** (LLM — DeepSeek ou OpenAI) para gerar e executar sinais de trading no MetaTrader 5. 
+
+> [!IMPORTANT]
+> **Não é necessário treinar nenhum modelo de machine learning.** O sistema usa um LLM pré-treinado (DeepSeek/OpenAI) via API. O que você precisa é gerar o **perfil estatístico** de cada ativo que pretende operar.
+
+---
+
+## O Erro e a Solução
+
+```
+Erro: Arquivo btcusd_statistical_profile.json nao encontrado.
+```
+
+**Causa:** O bot tenta carregar o arquivo `btcusd_statistical_profile.json` para fornecer contexto estatístico ao LLM, mas esse arquivo nunca foi gerado. Apenas o `xauusd_statistical_profile.json` existe atualmente.
+
+**Solução:** Executar o `xauusd_pattern_miner.py` apontando para os dados do BTCUSD (veja [Ordem de Execução](#ordem-de-execução-passo-a-passo) abaixo).
+
+---
+
+## Diagrama de Fluxo do Sistema
+
+```mermaid
+graph TD
+    A["📊 Dados Históricos CSV<br/>(Exportados do MT5)"]
+    B["⛏️ xauusd_pattern_miner.py<br/>(Minerador de Padrões)"]
+    C["📄 {symbol}_statistical_profile.json<br/>(Perfil Estatístico)"]
+    D["🤖 mt5_llm_trader.py<br/>(Orquestrador Principal)"]
+    E["🧠 llm_setup_creator.py<br/>(Módulo LLM - DeepSeek/OpenAI)"]
+    F["📡 MetaTrader 5<br/>(Dados em Tempo Real + Execução)"]
+    G["💹 Ordem Executada<br/>(LONG/SHORT/NEUTRAL)"]
+    H["📋 bot_trades_log.csv<br/>(Diário de Trades)"]
+    I["📊 analyze_log.py<br/>(Análise de Performance)"]
+    J["🔑 acesso.json<br/>(Credenciais MT5)"]
+    K["🔑 .env<br/>(API Keys)"]
+
+    A -->|"Etapa 1: Minerar"| B
+    B -->|"Gera"| C
+    C -->|"Etapa 2: Alimenta"| D
+    K -->|"API Key"| D
+    J -->|"Login MT5"| D
+    D -->|"Conecta"| F
+    F -->|"Preço + Indicadores"| D
+    D -->|"Envia contexto"| E
+    E -->|"Retorna setup JSON"| D
+    D -->|"Executa ordem"| G
+    G -->|"Registra"| H
+    H -->|"Etapa 3: Analisa"| I
+
+    style A fill:#2d3748,stroke:#4a5568,color:#e2e8f0
+    style B fill:#553c9a,stroke:#6b46c1,color:#e9d8fd
+    style C fill:#22543d,stroke:#276749,color:#c6f6d5
+    style D fill:#744210,stroke:#975a16,color:#fefcbf
+    style E fill:#1a365d,stroke:#2a4365,color:#bee3f8
+    style F fill:#702459,stroke:#97266d,color:#fed7e2
+    style G fill:#285e61,stroke:#2c7a7b,color:#b2f5ea
+    style H fill:#2d3748,stroke:#4a5568,color:#e2e8f0
+    style I fill:#2d3748,stroke:#4a5568,color:#e2e8f0
+    style J fill:#744210,stroke:#975a16,color:#fefcbf
+    style K fill:#744210,stroke:#975a16,color:#fefcbf
+```
+
+---
+
+## Inventário Completo de Arquivos
+
+| # | Arquivo | Tipo | Função |
+|---|---------|------|--------|
+| 1 | [xauusd_pattern_miner.py](file:///h:/Investimentos/rl_trader/strategy/Scripts/xauusd_pattern_miner.py) | 🔧 Preparação | Minerador: Lê CSVs históricos e gera o JSON de perfil estatístico |
+| 2 | [llm_setup_creator.py](file:///h:/Investimentos/rl_trader/strategy/Scripts/llm_setup_creator.py) | 🧠 Módulo IA | Monta o prompt com contexto técnico + estatístico e chama a API do LLM |
+| 3 | [gemini_setup_creator.py](file:///h:/Investimentos/rl_trader/strategy/Scripts/gemini_setup_creator.py) | 🧠 Módulo IA (alt) | Variante para Google Gemini (não usado pelo orquestrador principal) |
+| 4 | [mt5_llm_trader.py](file:///h:/Investimentos/rl_trader/strategy/Scripts/mt5_llm_trader.py) | 🎯 Orquestrador | Bot principal: calcula indicadores, aplica gates, chama LLM, executa ordens |
+| 5 | [mt5_hybrid_bot.py](file:///h:/Investimentos/rl_trader/strategy/Scripts/mt5_hybrid_bot.py) | 🎯 Bot Alternativo | Bot técnico puro (RSI + Breakout + Volume), sem LLM |
+| 6 | [analyze_log.py](file:///h:/Investimentos/rl_trader/strategy/Scripts/analyze_log.py) | 📊 Pós-análise | Analisa o CSV de trades e gera resumo de performance |
+| 7 | [acesso.json](file:///h:/Investimentos/rl_trader/strategy/Scripts/acesso.json) | 🔑 Config | Credenciais de login do MetaTrader 5 |
+| 8 | [.env](file:///h:/Investimentos/rl_trader/strategy/Scripts/.env) | 🔑 Config | API Keys (DEEPSEEK_API_KEY, OPENAI_API_KEY) |
+| 9 | `{symbol}_statistical_profile.json` | 📄 Dados | Perfil estatístico gerado pelo minerador (1 por ativo) |
+| 10 | `bot_trades_log.csv` | 📋 Log | Diário de trades do LLM trader (magic 999111) |
+| 11 | `bot_hybrid_log.csv` | 📋 Log | Diário de trades do hybrid bot (magic 888222) |
+
+---
+
+## Descrição Detalhada de Cada Script
+
+### 1. `xauusd_pattern_miner.py` — Minerador de Padrões
+
+> [!NOTE]
+> Apesar do nome conter "xauusd", este script é **genérico** e aceita qualquer ativo via parâmetro `--symbol`.
+
+**O que faz:**
+1. Lê os CSVs exportados do MetaTrader 5 (formato com separador `;` e decimal `,`)
+2. Filtra dados a partir de 2020 (últimos ~5 anos)
+3. Calcula para **cada hora do dia** (0h-23h):
+   - Range médio, mediano e desvio padrão
+   - Percentual de candles bullish vs bearish
+   - Volume médio
+4. Calcula estatísticas globais de regime (volatilidade média, percentis 10/90)
+5. Salva tudo em um JSON estruturado: `{symbol}_statistical_profile.json`
+
+**Entrada:** Arquivos CSV em `H:\Investimentos\rl_trader\Historico_Dataset\{SYMBOL}\H1\`
+
+**Saída:** Arquivo JSON como `btcusd_statistical_profile.json`
+
+---
+
+### 2. `llm_setup_creator.py` — Módulo de Análise LLM
+
+**O que faz:**
+1. Recebe contexto técnico (EMA200, ADX, DI, ATR, RSI, Volume) + perfil estatístico
+2. Monta um prompt detalhado com **regras obrigatórias** para o LLM:
+   - Respeitar tendência (EMA200 + ADX + DI)
+   - Stop Loss mínimo de 1.5x ATR
+   - Não sugerir trades contra tendência confirmada
+3. Envia para a API (DeepSeek ou OpenAI)
+4. Recebe resposta JSON estruturada com: `direcao_sugerida`, `gatilho_entrada`, `stop_loss`, `racional`
+
+**Providers suportados:** `deepseek` (modelo `deepseek-chat`) e `openai` (modelo `gpt-4o`)
+
+---
+
+### 3. `mt5_llm_trader.py` — Orquestrador Principal
+
+**O que faz (fluxo completo de cada ciclo):**
+
+```
+Para cada ativo configurado:
+│
+├─ 1. Verifica se já existe posição aberta (magic 999111) → se sim, pula
+│
+├─ 2. Busca tick atual do MT5
+│
+├─ 3. Calcula indicadores técnicos (300 candles H1):
+│     ├─ EMA 200
+│     ├─ RSI 14
+│     ├─ ADX 14 (+DI / -DI)
+│     ├─ ATR 14
+│     └─ Volume Ratio (vol/SMA20)
+│
+├─ 4. Aplica GATE TÉCNICO (filtro anti-tendência):
+│     ├─ Preço ABAIXO EMA200 + Trend Bear → bloqueia LONGs
+│     ├─ Preço ACIMA EMA200 + Trend Bull → bloqueia SHORTs
+│     └─ Volume Ratio < 0.3 → bloqueia TUDO
+│
+├─ 5. Carrega perfil estatístico ({symbol}_statistical_profile.json)
+│     └─ ⚠️ AQUI ocorre o erro se o arquivo não existir
+│
+├─ 6. Chama llm_setup_creator.run_llm_setup_analyzer()
+│     └─ Envia: provider, api_key, profile, hora, preço, RSI, contexto técnico
+│
+├─ 7. Recebe resposta da IA: LONG / SHORT / NEUTRAL
+│
+├─ 8. Aplica GATE OVERRIDE: se IA sugeriu direção bloqueada no passo 4 → ignora
+│
+└─ 9. Se válido → execute_llm_trade():
+      ├─ Verifica desvio do preço vs gatilho
+      ├─ Calcula SL (com guard de 1.5x ATR mínimo)
+      ├─ Calcula TP (2x o risco)
+      └─ Envia ordem ao MT5 (ORDER_TYPE_BUY ou ORDER_TYPE_SELL)
+```
+
+**Gestão de Trailing Stop:**
+O bot agora conta com uma função de acompanhamento dinâmico (`manage_trailing_stops()`) que atua ativamente sobre as posições abertas.
+- **Gatilho:** Quando o trade atinge ou ultrapassa **1% de lucro** (seja baseado no percentual de movimento do preço ou do saldo da conta).
+- **Ajuste:** O Stop Loss é movido protegendo o lucro com base na **vela H1 anterior**:
+  - Para **LONG**: O SL é ajustado para a **Mínima** da vela anterior.
+  - Para **SHORT**: O SL é ajustado para a **Máxima** da vela anterior.
+Isso acompanha a tendência enquanto protege o capital garantindo um bom acompanhamento no caso de fortes movimentos a favor.
+
+**Modos de operação:**
+- `ONE-SHOT`: Executa uma vez e encerra
+- `LOOP (--loop)`: Roda continuamente, analisa a cada nova hora (H1), atualiza log e checa trailing stop a cada 1 min
+
+---
+
+### 4. `analyze_log.py` — Análise de Performance
+
+**O que faz:**
+- Lê `bot_trades_log.csv`
+- Calcula: Win Rate, PnL Total, Avg Win/Loss, contagem LONGs vs SHORTs
+- Calcula Risk:Reward e distância do SL para cada trade
+- Imprime relatório formatado no terminal
+
+---
+
+## Referência de Comandos e Parâmetros (CLI)
+
+Aqui estão os formatos de linha de comando para todos os scripts envolvidos, com seus argumentos configuráveis:
+
+### `xauusd_pattern_miner.py`
+```bash
+python xauusd_pattern_miner.py [--data_dir DATA_DIR] [--timeframe TIMEFRAME] [--symbol SYMBOL] [--out OUT]
+```
+| Parâmetro | Tipo | Default | Descrição |
+|-----------|------|---------|-----------|
+| `--data_dir` | `str` | `.../Historico_Dataset/XAUUSD` | Diretório base dos CSVs. Importante referenciar a pasta correta do ativo. |
+| `--timeframe` | `str` | `H1` | O timeframe a ser extraído |
+| `--symbol` | `str` | `XAUUSD` | O nome do ativo para compor os nomes dos arquivos |
+| `--out` | `str` | `{symbol}_statistical_profile.json` | Caminho de arquivo do formato json gerado (Opcional) |
+
+### `mt5_llm_trader.py`
+```bash
+python mt5_llm_trader.py [--symbols SYMBOLS] [--provider PROVIDER] [--api_key API_KEY] [--exchange EXCHANGE] [--lot LOT] [--loop]
+```
+| Parâmetro | Tipo | Default | Descrição |
+|-----------|------|---------|-----------|
+| `--symbols` | `str` | `XAUUSD,XAGUSD,EURUSD` | Lista de ativos separados por vírgula para observar e processar |
+| `--provider`| `str` | `deepseek` | Provedor de LLM (`deepseek` ou `openai`) |
+| `--api_key` | `str` | Lida do `.env` | Chave de API, caso não use o arquivo `.env` |
+| `--exchange`| `str` | `demo` | Qual conta utilizar do `acesso.json` (`demo` ou `real`) |
+| `--lot`     | `float`| `0.1` | Volume de cada operação de entrada no MT5 |
+| `--loop`    | `flag` | *Nenhum* (False) | Execução intermitente. Mantêm o bot logado, disparando na H1. |
+
+### `mt5_hybrid_bot.py`
+```bash
+python mt5_hybrid_bot.py [--symbols SYMBOLS] [--exchange EXCHANGE] [--lot LOT] [--loop]
+```
+| Parâmetro | Tipo | Default | Descrição |
+|-----------|------|---------|-----------|
+| `--symbols` | `str` | `XAUUSD,XAGUSD,EURUSD` | Ativos operados separados por vírgula |
+| `--exchange`| `str` | `demo` | Utilização na plataforma FBS ou Real do `acesso.json` |
+| `--lot`     | `float`| `0.1` | Tamanho nominal correspondente de lote unitário |
+| `--loop`    | `flag` | *Nenhum* (False) | Mantêm o loop H1 e acompanhamento do Trailing Stop acionado |
+
+### `llm_setup_creator.py` / `gemini_setup_creator.py` (Módulos Autônomos de Simulação IA)
+*Podem ser testados separadamente via terminal para consultar lógicas avulsas:*
+```bash
+python <modulo>.py [--provider deepseek/openai] [--api_key API_KEY] [--profile PROFILE_JSON] [--hour HORA] [--price PREÇO]
+```
+
+### `analyze_log.py`
+```bash
+python analyze_log.py
+```
+*(Não possui parâmetros, processa unicamente `bot_trades_log.csv` do diretório corrento)*
+
+---
+
+## Ordem de Execução (Passo a Passo)
+
+### Etapa 0 — Pré-requisitos
+
+| Item | Status |
+|------|--------|
+| MetaTrader 5 instalado e logado | ✅ Verificar |
+| Python com dependências instaladas | ✅ Verificar |
+| `acesso.json` com credenciais | ✅ Existe |
+| `.env` com `DEEPSEEK_API_KEY` | ✅ Existe |
+| Dados históricos em `Historico_Dataset/{SYMBOL}/H1/` | ✅ BTCUSD e XAUUSD existem |
+
+### Etapa 1 — Gerar Perfis Estatísticos (UMA VEZ por ativo)
+
+> [!IMPORTANT]
+> Este é o passo que está faltando para o BTCUSD. Cada ativo novo que você quiser operar precisa deste passo.
+
+**Para BTCUSD (resolver o erro):**
+```bash
+cd H:\Investimentos\rl_trader\strategy\Scripts
+python xauusd_pattern_miner.py --symbol BTCUSD --data_dir "H:\Investimentos\rl_trader\Historico_Dataset\BTCUSD" --timeframe H1
+```
+Isso gerará: `btcusd_statistical_profile.json`
+
+**Para outros ativos (se necessário):**
+```bash
+# XAGUSD
+python xauusd_pattern_miner.py --symbol XAGUSD --data_dir "H:\Investimentos\rl_trader\Historico_Dataset\XAGUSD" --timeframe H1
+
+# EURUSD
+python xauusd_pattern_miner.py --symbol EURUSD --data_dir "H:\Investimentos\rl_trader\Historico_Dataset\EURUSD" --timeframe H1
+```
+
+**Perfis já existentes:**
+| Ativo | Arquivo | Status |
+|-------|---------|--------|
+| XAUUSD | `xauusd_statistical_profile.json` | ✅ Existe (35.496 candles, 2020-2025) |
+| BTCUSD | `btcusd_statistical_profile.json` | ❌ **NÃO EXISTE — precisa gerar** |
+| XAGUSD | `xagusd_statistical_profile.json` | ❌ Não existe |
+| EURUSD | `eurusd_statistical_profile.json` | ❌ Não existe |
+
+### Etapa 2 — Rodar o Bot
+
+```bash
+# ONE-SHOT (executa uma vez)
+python mt5_llm_trader.py --symbols BTCUSD --provider deepseek --exchange demo --lot 0.01
+
+# LOOP contínuo a cada H1
+python mt5_llm_trader.py --symbols BTCUSD,XAUUSD --provider deepseek --exchange demo --lot 0.1 --loop
+```
+
+**Parâmetros disponíveis:** *(Consulte a seção "Referência de Comandos e Parâmetros (CLI)" acima para ver todas as opções disponíveis).*
+
+### Etapa 3 — Analisar Performance (Pós-operação)
+
+```bash
+python analyze_log.py
+```
+
+---
+
+## Arquitetura: LLM Trader vs Hybrid Bot
+
+O projeto contém **dois bots independentes**:
+
+| Característica | `mt5_llm_trader.py` | `mt5_hybrid_bot.py` |
+|---|---|---|
+| **Magic Number** | 999111 | 888222 |
+| **Decisão** | LLM (IA) com gates técnicos | Indicadores técnicos puros |
+| **Estratégia** | IA sugere direção baseada em perfil estatístico + indicadores | RSI Mean-Reversion + Breakout com Volume |
+| **Dependências** | Precisa de perfil JSON + API Key | Autossuficiente |
+| **Stop Loss** | Definido pela IA (c/ guard 1.5x ATR) | ATR-based (1.5x RSI, 2.0x Breakout) |
+| **Take Profit** | 2.0x o risco | 2.0x o risco (RSI) / Trailing (Breakout) |
+| **Log** | `bot_trades_log.csv` | `bot_hybrid_log.csv` |
+| **Trailing Stop** | ✅ Sim (Na vela anterior após 1% lucro) | ✅ Sim (Breakout trades) |
+
+> [!TIP]
+> Ambos podem rodar **simultaneamente** sem conflito, pois usam Magic Numbers diferentes e logs separados.
+
+---
+
+## Cadeia de Dependências
+
+```mermaid
+graph LR
+    subgraph "Dados (Offline)"
+        CSV["CSVs MT5<br/>(Historico_Dataset)"]
+        MINER["xauusd_pattern_miner.py"]
+        PROFILE["*_statistical_profile.json"]
+        CSV --> MINER --> PROFILE
+    end
+
+    subgraph "Runtime (Online)"
+        TRADER["mt5_llm_trader.py"]
+        LLM["llm_setup_creator.py"]
+        MT5["MetaTrader 5"]
+        API["DeepSeek / OpenAI API"]
+        LOG["bot_trades_log.csv"]
+        
+        TRADER --> LLM --> API
+        TRADER --> MT5
+        TRADER --> LOG
+    end
+
+    subgraph "Config"
+        ENV[".env"]
+        ACESSO["acesso.json"]
+    end
+
+    PROFILE --> TRADER
+    ENV --> TRADER
+    ACESSO --> TRADER
+```
+
+---
+
+## Resumo Rápido
+
+1. **Não precisa treinar modelo** — usa LLM via API
+2. **Precisa gerar o perfil estatístico** para cada ativo com `xauusd_pattern_miner.py`
+3. O erro `btcusd_statistical_profile.json nao encontrado` ocorre porque o minerador nunca foi executado para BTCUSD
+4. O fluxo é: **Minerar dados → Rodar bot → Analisar resultados**

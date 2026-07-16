@@ -1,0 +1,51 @@
+# Módulo de Análises e Geração de Setups (EDA Quantitativa)
+
+Finalizamos a implementação do Módulo Empírico para o `XAUUSD`. Em vez de fazer com que a Inteligência Artificial "chute" para onde o mercado vai olhando cegamente os ticks, nós ensinamos probabilidade e matemática pra ela.
+
+## 1. O que foi feito estatisticamente?
+
+O script `xauusd_pattern_miner.py` processou mais de **35.000 velas de 1 Hora (H1)** do XAUUSD correspondendo aos anos de 2020 até 2025 (Pós-Covid) que estavam nas suas pastas do MT5.
+
+O script calculou a Sazonalidade Intra-diária:
+- Em qual hora o mercado tende a dar esticões (Maior Average True Range / Distância High-Low).
+- Em qual hora o mercado é predominantemente Autista (Buy) e Baixista (Sell).
+- Um mapa global de Volatilidade e Thresholds.
+
+Ao rodar esse extrator, ele consolida tudo em um "Cérebro Paralelo" (uma base de memória matemática) chamada **`xauusd_statistical_profile.json`**. 
+
+## 2. A Mágica: Conectando a Base ao Gemini
+
+O script `gemini_setup_creator.py` foi desenhado com o seu schema operacional.
+
+Quando você executá-lo para analisar a moeda no presente, a mecânica da Inteligência será a seguinte:
+
+1. O script injeta o `MERCADO ATUAL` real (Hora Atual, Preço, RSI, etc).
+2. O script abre o `xauusd_statistical_profile.json` e anexa silenciosamente os dados passados para **aquela exata hora**.
+3. O Prompt força a IA a cruzar os dados: _"Nenhuma decisão pode ser tomada sem justificar a estatística"_.
+4. A IA do "Gemini 1.5 Pro" só pode responder usando nosso objeto de Segurança (O Schema JSON exigido):
+
+```json
+{
+  "ativo": "XAUUSD",
+  "direcao_sugerida": "SHORT",
+  "racional": "Na hora EET atual (8h), estatisticamente há 58% de viés baixista com volatilidade baixa. Os dados indicam que o rompimento sugerido pelo prompt carece de fundamento de volume. Aguardamos armadilha de compra (Liquidity Grab).",
+  "probabilidade_estatistica_hora": "58.2% Baixista, Range Medio $4",
+  "gatilho_entrada": 2341.0,
+  "stop_loss": 2346.0
+}
+```
+
+> [!TIP]
+> Instalei os pacotes `google-generativeai` e `pydantic` no seu ambiente Python local da pasta `rl_trader_cluster` silenciosamente. 
+
+## 3. Próximo Passo
+
+Para rodar e conversar *de verdade* com a API do Google:
+
+**Terminal**
+```powershell
+# Abra o terminal e rode:
+H:\Investimentos\rl_trader\rl_trader_cluster\Scripts\python.exe h:\Investimentos\rl_trader\strategy\Scripts\gemini_setup_creator.py --api_key "COLE-SUA-CHAVE-GEMINI-AQUI" --hour 10 --price 2605.5
+```
+
+Experimente alterar os parâmetros `--hour` ou o preço para ver as sugestões se moldarem magicamente à empiria da amostra dos 5 anos! Se não tiver a chave agora, você pode consegui-a num instante através do [Google AI Studio](https://aistudio.google.com/app/apikey).
